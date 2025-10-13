@@ -6,8 +6,8 @@ import requests
 import pandas as pd
 import streamlit as st
 from typing import Optional, List, Dict
-from app.utils.config.config_util import AWS
 from botocore.exceptions import BotoCoreError, ClientError
+from app.utils.config.config_util import AWS, AUTH_TOKEN_STAR
 
 # =========================
 # Page config & styles
@@ -435,7 +435,7 @@ folder_path = st.sidebar.selectbox(
     help="Select the base folder for document operations"
 )
 
-token = st.sidebar.text_input("Auth Token", value="", type="password")
+token = st.sidebar.text_input("Auth Token", value=AUTH_TOKEN_STAR, type="password")
 environment_url = st.sidebar.text_input("Environment URL", value="https://management-allianceindicatorstest.ciat.cgiar.org/api/")
 
 st.sidebar.markdown("---")
