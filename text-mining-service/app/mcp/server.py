@@ -52,7 +52,7 @@ async def authenticate_prms(key: str, bucket: str, token: str, environmentUrl: s
 
 
 @mcp.tool()
-async def process_document(bucket: str, key: str, token: Any, environmentUrl: str) -> dict:
+async def process_document(bucket: str, key: str, token: Any, environmentUrl: str, user_id: str = None) -> dict:
     logger.info("✅ process_document invoked via MCP")
 
     try:
@@ -62,9 +62,10 @@ async def process_document(bucket: str, key: str, token: Any, environmentUrl: st
             raise ValueError("Authentication failed")
 
         logger.info(f"Processing document: {key} from bucket: {bucket}")
+        logger.info(f"👤 User ID for tracking: {user_id}")
 
         result = process_with_llm(
-            bucket_name=bucket, file_key=key)
+            bucket_name=bucket, file_key=key, user_id=user_id)
 
         await notification_service.send_slack_notification(
             emoji=":ai: :pick:",
@@ -76,7 +77,14 @@ async def process_document(bucket: str, key: str, token: Any, environmentUrl: st
             priority="Low"
         )
 
-        return result["json_content"]
+        response = {
+            "json_content": result["json_content"]
+        }
+        
+        if "interaction_id" in result:
+            response["interaction_id"] = result["interaction_id"]
+
+        return response
 
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
@@ -93,7 +101,7 @@ async def process_document(bucket: str, key: str, token: Any, environmentUrl: st
 
 
 @mcp.tool()
-async def process_document_prms(bucket: str, key: str, token: Any, environmentUrl: str) -> dict:
+async def process_document_prms(bucket: str, key: str, token: Any, environmentUrl: str, user_id: str = None) -> dict:
     logger.info("✅ process_document_prms invoked via MCP")
 
     try:
@@ -102,11 +110,11 @@ async def process_document_prms(bucket: str, key: str, token: Any, environmentUr
         if not is_authenticated:
             raise ValueError("PRMS Authentication failed")
 
-        logger.info(
-            f"Processing document for PRMS: {key} from bucket: {bucket}")
+        logger.info(f"Processing document for PRMS: {key} from bucket: {bucket}")
+        logger.info(f"👤 User ID for tracking: {user_id}")
 
         result = process_with_llm_prms(
-            bucket_name=bucket, file_key=key)
+            bucket_name=bucket, file_key=key, user_id=user_id)
 
         await notification_service.send_slack_notification(
             emoji=":ai: :pick:",
@@ -118,7 +126,14 @@ async def process_document_prms(bucket: str, key: str, token: Any, environmentUr
             priority="Low"
         )
 
-        return result["json_content"]
+        response = {
+            "json_content": result["json_content"]
+        }
+        
+        if "interaction_id" in result:
+            response["interaction_id"] = result["interaction_id"]
+
+        return response
 
     except Exception as e:
         logger.error(f"Unexpected error in PRMS processing: {str(e)}")

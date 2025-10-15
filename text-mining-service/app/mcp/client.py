@@ -32,6 +32,8 @@ class TextMiningRequest(BaseModel):
         ..., description="Authentication token", examples=["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."])
     environmentUrl: str = Field(
         ..., description="Environment for the service (e.g., production, test)")
+    user_id: Optional[str] = Field(
+        None, description="User identifier for interaction tracking", examples=["user@example.com", "researcher@cgiar.org"])
 
 class UploadResponse(BaseModel):
     bucket: str = Field(..., description="S3 bucket where the file was uploaded")
@@ -136,6 +138,9 @@ async def process_document_endpoint(
         default=None, description="Document file to upload and process. Optional if key is provided"),
     environmentUrl: str = Form(
         ..., description="Target environment URL for authentication"
+    ),
+    user_id: Optional[str] = Form(
+        None, description="User identifier for interaction tracking", examples=["user@example.com", "researcher@cgiar.org"]
     )
 ):
     """
@@ -147,6 +152,7 @@ async def process_document_endpoint(
     - key: Object key in the S3 bucket (required if no file is provided)
     - file: File to upload and process (required if no key is provided)
     - environmentUrl: Environment for the service (e.g., production, test)
+    - user_id: User identifier for interaction tracking (optional)
 
     Returns:
         dict: Result of the document processing
@@ -192,14 +198,19 @@ async def process_document_endpoint(
             async with ClientSession(read, write, sampling_callback=handle_sampling_message) as session:
                 await session.initialize()
 
+                mcp_arguments = {
+                    "bucket": bucketName,
+                    "key": key,
+                    "token": token,
+                    "environmentUrl": environmentUrl
+                }
+                
+                if user_id:
+                    mcp_arguments["user_id"] = user_id
+
                 result = await session.call_tool(
                     "process_document",
-                    arguments={
-                        "bucket": bucketName,
-                        "key": key,
-                        "token": token,
-                        "environmentUrl": environmentUrl
-                    }
+                    arguments=mcp_arguments
                 )
                 return result
 
@@ -245,6 +256,9 @@ async def process_document_prms_endpoint(
         default=None, description="File to upload and process. Optional if key is provided"),
     environmentUrl: str = Form(
         ..., description="Target environment URL for PRMS authentication"
+    ),
+    user_id: Optional[str] = Form(
+        None, description="User identifier for interaction tracking", examples=["user@example.com", "researcher@cgiar.org"]
     )
 ):
     """
@@ -256,6 +270,7 @@ async def process_document_prms_endpoint(
     - key: Object key in the S3 bucket (required if no file is provided)
     - file: File to upload and process (required if no key is provided)
     - environmentUrl: Environment for the service (e.g., production, test)
+    - user_id: User identifier for interaction tracking (optional)
 
     Returns:
         dict: Result of the document processing for PRMS
@@ -300,14 +315,19 @@ async def process_document_prms_endpoint(
             async with ClientSession(read, write, sampling_callback=handle_sampling_message) as session:
                 await session.initialize()
 
+                mcp_arguments = {
+                    "bucket": bucketName,
+                    "key": key,
+                    "token": token,
+                    "environmentUrl": environmentUrl
+                }
+
+                if user_id:
+                    mcp_arguments["user_id"] = user_id
+
                 result = await session.call_tool(
                     "process_document_prms",
-                    arguments={
-                        "bucket": bucketName,
-                        "key": key,
-                        "token": token,
-                        "environmentUrl": environmentUrl
-                    }
+                    arguments=mcp_arguments
                 )
                 return result
 

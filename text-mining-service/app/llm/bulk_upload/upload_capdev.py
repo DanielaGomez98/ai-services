@@ -57,16 +57,61 @@ def process_single_batch(batch_chunks, prompt, batch_number, all_reference_data,
             parsed_result = json.loads(response_text)
             
             if isinstance(parsed_result, dict) and "results" in parsed_result:
-                for result in parsed_result["results"]:
+                for i, result in enumerate(parsed_result["results"]):
                     if isinstance(result, dict):
+                        # Log each result before mapping
+                        result_title = result.get("title", f"Result {i+1}")
+                        logger.info(f"🔍 [Thread-{batch_number}] Processing result {i+1}: '{result_title}'")
+                        
                         result["batch_number"] = batch_number
+
+                        # Log partners before mapping
+                        partners = result.get("partners", [])
+                        logger.info(f"👥 [Thread-{batch_number}] Result '{result_title}' has {len(partners)} partners: {[p.get('name', 'Unknown') for p in partners if isinstance(p, dict)]}")
 
                         if mapping_service_url:
                             try:
+                                logger.info(f"🔗 [Thread-{batch_number}] Starting field mapping for '{result_title}'...")
+                                result_before_mapping = json.dumps(result, indent=2)
+                                
                                 result = map_fields_with_opensearch(result, mapping_service_url)
-                                logger.info(f"🔗 [Thread-{batch_number}] Fields mapped for result in batch {batch_number}")
+                                
+                                result_after_mapping = json.dumps(result, indent=2)
+                                
+                                # Check if mapping actually happened
+                                partners_after = result.get("partners", [])
+                                mapped_partners = [p for p in partners_after if isinstance(p, dict) and p.get("institution_id")]
+                                
+                                logger.info(f"✅ [Thread-{batch_number}] Field mapping completed for '{result_title}'. Mapped {len(mapped_partners)}/{len(partners_after)} partners")
+                                
+                                # Log detailed partner mapping results
+                                for j, partner in enumerate(partners_after):
+                                    if isinstance(partner, dict):
+                                        partner_name = partner.get("name", "Unknown")
+                                        institution_id = partner.get("institution_id")
+                                        score = partner.get("similarity_score")
+                                        
+                                        if institution_id:
+                                            logger.info(f"  ✅ Partner {j+1}: '{partner_name}' → ID: {institution_id}, Score: {score}")
+                                        else:
+                                            logger.warning(f"  ❌ Partner {j+1}: '{partner_name}' → NOT MAPPED")
+                                
+                                # Log if no partners were mapped at all
+                                if len(partners) > 0 and len(mapped_partners) == 0:
+                                    logger.error(f"🚨 [Thread-{batch_number}] CRITICAL: No partners were mapped for '{result_title}' despite having {len(partners)} partners!")
+                                    logger.error(f"🚨 Before mapping: {result_before_mapping[:500]}...")
+                                    logger.error(f"🚨 After mapping: {result_after_mapping[:500]}...")
+                                    
                             except Exception as map_error:
-                                logger.warning(f"⚠️ [Thread-{batch_number}] Field mapping failed for batch {batch_number}: {str(map_error)}")
+                                logger.error(f"❌ [Thread-{batch_number}] Field mapping FAILED for '{result_title}': {str(map_error)}")
+                                logger.error(f"❌ Error type: {type(map_error).__name__}")
+                                logger.error(f"❌ Result data: {json.dumps(result, indent=2)[:500]}...")
+                        else:
+                            logger.warning(f"⚠️ [Thread-{batch_number}] Field mapping DISABLED (no mapping_service_url provided)")
+                    else:
+                        logger.warning(f"⚠️ [Thread-{batch_number}] Result {i+1} is not a dict: {type(result)}")
+            else:
+                logger.warning(f"⚠️ [Thread-{batch_number}] Parsed result doesn't have 'results' key or is not a dict")
             
             return parsed_result
         
@@ -79,19 +124,24 @@ def process_single_batch(batch_chunks, prompt, batch_number, all_reference_data,
             if is_valid_json(cleaned_response):
                 parsed_result = json.loads(cleaned_response)
                 if isinstance(parsed_result, dict) and "results" in parsed_result:
-                    for result in parsed_result["results"]:
+                    logger.info(f"📊 [Thread-{batch_number}] Found {len(parsed_result['results'])} results in cleaned batch {batch_number}")
+                    
+                    for i, result in enumerate(parsed_result["results"]):
                         if isinstance(result, dict):
+                            result_title = result.get("title", f"Cleaned Result {i+1}")
+                            logger.info(f"🔍 [Thread-{batch_number}] Processing cleaned result {i+1}: '{result_title}'")
+                            
                             result["batch_number"] = batch_number
 
                             if mapping_service_url:
                                 try:
+                                    logger.info(f"🔗 [Thread-{batch_number}] Starting field mapping for cleaned '{result_title}'...")
                                     result = map_fields_with_opensearch(result, mapping_service_url)
-                                    logger.info(f"🔗 Field mapping enabled with service: {mapping_service_url}")
-                                    logger.info(f"🔗 [Thread-{batch_number}] Fields mapped for cleaned result in batch {batch_number}")
+                                    logger.info(f"✅ [Thread-{batch_number}] Field mapping completed for cleaned '{result_title}'")
                                 except Exception as map_error:
-                                    logger.warning(f"⚠️ [Thread-{batch_number}] Field mapping failed for cleaned batch {batch_number}: {str(map_error)}")
+                                    logger.error(f"❌ [Thread-{batch_number}] Field mapping FAILED for cleaned '{result_title}': {str(map_error)}")
                             else:
-                                logger.info(f"⚠️ Field mapping disabled (no mapping_service_url provided)")
+                                logger.warning(f"⚠️ Field mapping disabled (no mapping_service_url provided)")
 
                 return parsed_result
             
@@ -99,6 +149,7 @@ def process_single_batch(batch_chunks, prompt, batch_number, all_reference_data,
             
     except Exception as e:
         logger.error(f"❌ [Thread-{batch_number}] Error processing batch {batch_number}: {str(e)}")
+        logger.error(f"❌ Exception type: {type(e).__name__}")
         return {"results": [{"error": str(e), "batch": batch_number}]}
 
 
@@ -109,10 +160,21 @@ def merge_batch_results(batch_results_with_numbers):
     sorted_results = sorted(batch_results_with_numbers, key=lambda x: x[1])
     
     merged_results = {"results": []}
+    total_mapped_partners = 0
+    total_partners = 0
     
     for batch_result, batch_number in sorted_results:
         if isinstance(batch_result, dict):
             if "results" in batch_result and isinstance(batch_result["results"], list):
+                logger.info(f"📦 Merging batch {batch_number} with {len(batch_result['results'])} results")
+                
+                for result in batch_result["results"]:
+                    if isinstance(result, dict):
+                        partners = result.get("partners", [])
+                        total_partners += len(partners)
+                        mapped_partners = [p for p in partners if isinstance(p, dict) and p.get("institution_id")]
+                        total_mapped_partners += len(mapped_partners)
+                
                 merged_results["results"].extend(batch_result["results"])
             else:
                 merged_results["results"].append(batch_result)
@@ -120,6 +182,8 @@ def merge_batch_results(batch_results_with_numbers):
             merged_results["results"].append({"data": batch_result, "batch": batch_number})
     
     logger.info(f"📊 Merged {len(merged_results['results'])} total results from all batches")
+    logger.info(f"🔗 Mapping summary: {total_mapped_partners}/{total_partners} partners successfully mapped")
+    
     return merged_results
 
 

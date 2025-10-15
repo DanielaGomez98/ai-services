@@ -43,6 +43,7 @@ Alliance Main Contact Person
     • Extract the contact's name into the following field as an object:
         • main_contact_person: {"name": "..."}
     • Look for any mention or indication of the primary Alliance contact in the document (e.g., "Alliance focal point," "main Alliance contact," "Alliance coordinator," or a named person specifically flagged as responsible).
+    • It could be also the person who reported the result.
     • If no specific name or contact is mentioned, do not return the field in the output JSON.
 
 Keywords
@@ -199,6 +200,7 @@ Partners
     • Refers to the partner(s) that made a significant contribution to the achievement of the result that is being submitted.
     • List all relevant partner names mentioned in the document as an array of objects with the following structure:
         [{"name": "<institution name 1>"}, {"name": "<institution name 2>"}]
+    • If there are multiple partners, they will be separated by commas, and you should list each one as a separate object in the array.
     • If the document does not provide enough detail, do not return the partners field in the output JSON.
 
 Geoscope (Geographical Scope)
