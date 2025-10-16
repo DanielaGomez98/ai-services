@@ -1,4 +1,7 @@
 import requests
+from app.utils.logger.logger_util import get_logger
+
+logger = get_logger()
 
 def map_fields_with_opensearch(mining_result, mapping_service_url):
     entries = []
@@ -13,7 +16,7 @@ def map_fields_with_opensearch(mining_result, mapping_service_url):
         entries.append({"value": affiliation, "type": "institution"})
 
     for partner in mining_result.get("partners", []):
-        if partner_name := partner.get("name"):
+        if partner_name := partner.get("institution_name"):
             entries.append({"value": partner_name, "type": "institution"})
 
     if not entries:
@@ -28,28 +31,66 @@ def map_fields_with_opensearch(mining_result, mapping_service_url):
         response.raise_for_status()
         mapped = response.json().get("results", [])
 
-        # Asociar los IDs y scores de vuelta al resultado original
+        mapped_dict = {}
         for m in mapped:
-            key = m["original_value"]
-            if m["type"] == "staff":
-                if key == mining_result.get("main_contact_person", {}).get("name"):
-                    mining_result["main_contact_person"]["code"] = m["mapped_id"]
-                    mining_result["main_contact_person"]["similarity_score"] = m["score"]
-                elif key == mining_result.get("training_supervisor", {}).get("name"):
-                    mining_result["training_supervisor"]["code"] = m["mapped_id"]
-                    mining_result["training_supervisor"]["similarity_score"] = m["score"]
+            key = (m["original_value"], m["type"])
+            mapped_dict[key] = m
 
-            elif m["type"] == "institution":
-                if key == mining_result.get("trainee_affiliation", {}).get("affiliation_name"):
-                    mining_result["trainee_affiliation"]["institution_id"] = m["mapped_id"]
-                    mining_result["trainee_affiliation"]["similarity_score"] = m["score"]
-                for p in mining_result.get("partners", []):
-                    if p.get("name") == key:
-                        p["institution_id"] = m["mapped_id"]
-                        p["similarity_score"] = m["score"]
-                        break
+        if contact := mining_result.get("main_contact_person", {}).get("name"):
+            key = (contact, "staff")
+            if key in mapped_dict:
+                m = mapped_dict[key]
+                mining_result["main_contact_person"]["code"] = m.get("mapped_id")
+                mining_result["main_contact_person"]["similarity_score"] = m.get("score", 0)
+
+        if supervisor := mining_result.get("training_supervisor", {}).get("name"):
+            key = (supervisor, "staff")
+            if key in mapped_dict:
+                m = mapped_dict[key]
+                mining_result["training_supervisor"]["code"] = m.get("mapped_id")
+                mining_result["training_supervisor"]["similarity_score"] = m.get("score", 0)
+
+        if affiliation := mining_result.get("trainee_affiliation", {}).get("affiliation_name"):
+            key = (affiliation, "institution")
+            if key in mapped_dict:
+                m = mapped_dict[key]
+                mining_result["trainee_affiliation"]["institution_id"] = m.get("mapped_id")
+                mining_result["trainee_affiliation"]["similarity_score"] = m.get("score", 0)
+
+        for partner in mining_result.get("partners", []):
+            if partner_name := partner.get("institution_name"):
+                key = (partner_name, "institution")
+                if key in mapped_dict:
+                    m = mapped_dict[key]
+                    partner["institution_id"] = m.get("mapped_id")
+                    partner["similarity_score"] = m.get("score", 0)
 
     except Exception as e:
-        print(f"❌ Error mapping fields: {e}")
+        logger.error(f"❌ Error mapping fields: {e}")
+
+        if "main_contact_person" in mining_result and mining_result["main_contact_person"].get("name"):
+            if "code" not in mining_result["main_contact_person"]:
+                mining_result["main_contact_person"]["code"] = None
+            if "similarity_score" not in mining_result["main_contact_person"]:
+                mining_result["main_contact_person"]["similarity_score"] = 0
+
+        if "training_supervisor" in mining_result and mining_result["training_supervisor"].get("name"):
+            if "code" not in mining_result["training_supervisor"]:
+                mining_result["training_supervisor"]["code"] = None
+            if "similarity_score" not in mining_result["training_supervisor"]:
+                mining_result["training_supervisor"]["similarity_score"] = 0
+
+        if "trainee_affiliation" in mining_result and mining_result["trainee_affiliation"].get("affiliation_name"):
+            if "institution_id" not in mining_result["trainee_affiliation"]:
+                mining_result["trainee_affiliation"]["institution_id"] = None
+            if "similarity_score" not in mining_result["trainee_affiliation"]:
+                mining_result["trainee_affiliation"]["similarity_score"] = 0
+
+        for partner in mining_result.get("partners", []):
+            if partner.get("institution_name"):
+                if "institution_id" not in partner:
+                    partner["institution_id"] = None
+                if "similarity_score" not in partner:
+                    partner["similarity_score"] = 0
 
     return mining_result

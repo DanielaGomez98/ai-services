@@ -238,7 +238,8 @@ def process_document_capdev(bucket_name, file_key, prompt=PROMPT_BULK_UPLOAD_CAP
             logger.info(f"📊 Total results: {len(final_result.get('results', []))}")
             logger.info(f"⏱️ Total processing time: {elapsed_time:.2f} seconds")
             logger.info(f"🚀 Used {max_workers} parallel workers")
-            logger.info(f"⚡ Processing mode: SIMPLIFIED (no embeddings)")
+
+            logger.info(f"✅ Successfully generated response:\n{json.dumps(final_result, indent=2, ensure_ascii=False)}")
             
             return {
                 "content": final_result,

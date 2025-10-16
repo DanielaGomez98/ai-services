@@ -199,7 +199,7 @@ Partners
     • partners
     • Refers to the partner(s) that made a significant contribution to the achievement of the result that is being submitted.
     • List all relevant partner names mentioned in the document as an array of objects with the following structure:
-        [{"name": "<institution name 1>"}, {"name": "<institution name 2>"}]
+        [{"institution_name": "<institution name 1>"}, {"institution_name": "<institution name 2>"}]
     • If there are multiple partners, they will be separated by commas, and you should list each one as a separate object in the array.
     • If the document does not provide enough detail, do not return the partners field in the output JSON.
 
@@ -277,7 +277,6 @@ Follow this exact structure:
                 "..."
             ],
             "contract_code": "<value>",
-            "contract_name": "<value>",
             "sdg_targets": <[array of sdg targets]>,
             "training_category": "<Training or Engagement>",
             "start_date": "<value>",
@@ -308,10 +307,10 @@ Follow this exact structure:
             "delivery_modality": "<value>",
             "partners": [
                 {
-                    "name": "<partner name 1>"
+                    "institution_name": "<partner name 1>"
                 },
                 {
-                    "name": "<partner name 2>"
+                    "institution_name": "<partner name 2>"
                 },
                 ...
             ],

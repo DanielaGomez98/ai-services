@@ -78,58 +78,18 @@ def normalize_results_to_df(result_json: Dict) -> pd.DataFrame:
     def list_to_str(val):
         if isinstance(val, list):
             try:
-                return ", ".join([
-                    json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else str(v)
-                    for v in val
-                ])
+                return json.dumps(val, ensure_ascii=False)
             except Exception:
                 return json.dumps(val, ensure_ascii=False)
         return val
 
     for col in df.columns:
         df[col] = df[col].apply(list_to_str)
-
-    first_cols = [
-        "indicator",
-        "title", 
-        "description",
-        "year",
-        "main_contact_person.name",
-        "main_contact_person.code",
-        "main_contact_person.similarity_score",
-        "keywords",
-        "contract_code",
-        "contract_name",
-        "sdg_targets",
-        "training_category",
-        "training_type",
-        "training_purpose",
-        "start_date",
-        "end_date", 
-        "delivery_modality",
-        "length_of_training",
-        "total_participants",
-        "male_participants",
-        "female_participants", 
-        "non_binary_participants",
-        "degree",
-        "trainee_name",
-        "trainee_gender",
-        "trainee_affiliation.affiliation_name",
-        "trainee_affiliation.institution_id",
-        "trainee_affiliation.similarity_score",
-        "trainee_nationality.code",
-        "training_supervisor.name",
-        "language.name",
-        "language.code",
-        "partners",
-        "geoscope_level",
-        "regions",
-        "countries",
-        "evidences"
-    ]
-    ordered = [c for c in first_cols if c in df.columns] + [c for c in df.columns if c not in first_cols]
-    return df[ordered] if not df.empty else df
+    
+    if "batch_number" in df.columns:
+        df = df.drop("batch_number", axis=1)
+    
+    return df
 
 
 def extract_inner_results_json(raw: Dict) -> Dict:
@@ -154,15 +114,6 @@ def extract_inner_results_json(raw: Dict) -> Dict:
                         return parsed
                 except Exception:
                     continue
-
-    text = raw.get("text")
-    if isinstance(text, str):
-        try:
-            parsed = json.loads(text)
-            if isinstance(parsed, dict) and "results" in parsed:
-                return parsed
-        except Exception:
-            pass
 
     return {"results": []}
 
@@ -198,15 +149,17 @@ def post_to_star_formalize(
         "Content-Type": "application/json"
     }
     
-    payload = selected_results
+    payload = {
+        "results": selected_results
+    }
     
     st.write(f"🔍 **Debug Info:**")
     st.write(f"- Number of selected results: {len(selected_results)}")
     
-    if payload:
+    if selected_results:
         st.write(f"- Sample of first result:")
         with st.expander("First result preview", expanded=False):
-            st.json(payload[0])
+            st.json(selected_results[0])
     
     try:
         resp = requests.post(url, json=payload, headers=headers, timeout=300)
@@ -223,6 +176,82 @@ def post_to_star_formalize(
         raise RuntimeError(f"Network error: {str(e)}")
 
 
+def build_result_from_edited_row(edited_row: pd.Series, original_result: Dict) -> Dict:
+    """Build JSON result from edited DataFrame row"""
+    result = original_result.copy()
+
+    if "batch_number" in result:
+        del result["batch_number"]
+    
+    simple_fields = [
+        "indicator", "title", "description", "contract_code", "training_category", 
+        "training_type", "training_purpose", "delivery_modality", 
+        "length_of_training", "degree", "trainee_name", "trainee_gender", 
+        "geoscope_level", "start_date", "end_date", "year"
+    ]
+    
+    for field in simple_fields:
+        if field in edited_row.index and pd.notna(edited_row[field]):
+            result[field] = str(edited_row[field]).strip()
+    
+    numeric_fields = [
+        "total_participants", "male_participants", 
+        "female_participants", "non_binary_participants"
+    ]
+    
+    for field in numeric_fields:
+        if field in edited_row.index and pd.notna(edited_row[field]):
+            try:
+                result[field] = int(edited_row[field])
+            except (ValueError, TypeError):
+                result[field] = original_result.get(field, 0)
+    
+    nested_fields = {
+        "main_contact_person.name": ("main_contact_person", "name"),
+        "main_contact_person.code": ("main_contact_person", "code"),
+        "main_contact_person.similarity_score": ("main_contact_person", "similarity_score"),
+        "training_supervisor.name": ("training_supervisor", "name"),
+        "training_supervisor.code": ("training_supervisor", "code"),
+        "training_supervisor.similarity_score": ("training_supervisor", "similarity_score"),
+        "trainee_affiliation.affiliation_name": ("trainee_affiliation", "affiliation_name"),
+        "trainee_affiliation.institution_id": ("trainee_affiliation", "institution_id"),
+        "trainee_affiliation.similarity_score": ("trainee_affiliation", "similarity_score"),
+        "language.name": ("language", "name"),
+        "language.code": ("language", "code")
+    }
+    
+    for field_key, (parent, child) in nested_fields.items():
+        if field_key in edited_row.index and pd.notna(edited_row[field_key]):
+            if parent not in result:
+                result[parent] = {}
+            result[parent][child] = edited_row[field_key]
+    
+    array_fields = ["sdg_targets", "keywords", "partners", "countries", "regions", "evidences"]
+    
+    for field in array_fields:
+        if field in edited_row.index and pd.notna(edited_row[field]):
+            edited_value = str(edited_row[field]).strip()
+            
+            if not edited_value:
+                result[field] = original_result.get(field, [])
+                continue
+            
+            try:
+                parsed_value = json.loads(edited_value)
+                if isinstance(parsed_value, list):
+                    result[field] = parsed_value
+                elif isinstance(parsed_value, dict):
+                    result[field] = [parsed_value]
+                else:
+                    result[field] = original_result.get(field, [])
+            except (json.JSONDecodeError, TypeError):
+                result[field] = original_result.get(field, [])
+        else:
+            result[field] = original_result.get(field, [])
+    
+    return result
+
+
 def _render_results(result: Dict, df: pd.DataFrame, elapsed: float) -> None:
     st.success(f"Processed successfully! ⏱️ {elapsed:.2f}s")
 
@@ -235,13 +264,13 @@ def _render_results(result: Dict, df: pd.DataFrame, elapsed: float) -> None:
         payload = extract_inner_results_json(result)
         original_results = payload.get("results", [])
         
-        if original_results:
+        if original_results:            
             st.markdown("**Select records to submit to STAR platform:**")
             
             col1, col2, col3 = st.columns([1, 2, 2])
             
-            with col1:
-                select_all = st.checkbox("Select All", key="select_all_records")
+            # with col1:
+            #     select_all = st.checkbox("Select All", key="select_all_records")
             
             with col2:
                 st.info(f"📊 Found {len(original_results)} records")
@@ -261,31 +290,229 @@ def _render_results(result: Dict, df: pd.DataFrame, elapsed: float) -> None:
             for idx in range(len(df_display)):
                 checkbox_key = f"record_select_{idx}"
                 
-                if select_all:
-                    st.session_state[checkbox_key] = True
+                # if select_all:
+                #     st.session_state[checkbox_key] = True
                 
                 current_value = st.session_state.get(checkbox_key, False)
                 selection_column.append(current_value)
             
             df_display.insert(0, "Select", selection_column)
+
+            column_config = {
+                "Select": st.column_config.CheckboxColumn(
+                    "Select",
+                    help="Select records to submit to STAR",
+                    default=False,
+                ),
+                "indicator": st.column_config.TextColumn(
+                    "Indicator",
+                    help="Edit the indicator",
+                    max_chars=500,
+                ),
+                "title": st.column_config.TextColumn(
+                    "Title",
+                    help="Edit the title of the record",
+                    max_chars=500,
+                    required=True,
+                ),
+                "description": st.column_config.TextColumn(
+                    "Description",
+                    help="Edit the description",
+                    max_chars=1000,
+                ),
+                "year": st.column_config.TextColumn(
+                    "Year",
+                    help="Edit the year (e.g., 2024, 2025)",
+                    max_chars=20,
+                ),
+                "contract_code": st.column_config.TextColumn(
+                    "Contract Code",
+                    help="Edit the contract code",
+                    max_chars=50,
+                ),
+                "sdg_targets": st.column_config.TextColumn(
+                    "SDG Targets",
+                    help="Edit SDG targets (comma-separated)",
+                    max_chars=500,
+                ),
+                "training_category": st.column_config.SelectboxColumn(
+                    "Training Category",
+                    help="Select training category",
+                    options=["Training", "Engagement"],
+                ),
+                "training_type": st.column_config.SelectboxColumn(
+                    "Training Type",
+                    help="Select training type", 
+                    options=["Individual training", "Group training"],
+                ),
+                "training_purpose": st.column_config.TextColumn(
+                    "Training Purpose",
+                    help="Edit training purpose",
+                    max_chars=100,
+                ),
+                "start_date": st.column_config.TextColumn(
+                    "Start Date",
+                    help="Edit start date (format: YYYY-MM-DD, e.g., 2025-04-30)",
+                    max_chars=10,
+                ),
+                "end_date": st.column_config.TextColumn(
+                    "End Date", 
+                    help="Edit end date (format: YYYY-MM-DD, e.g., 2025-04-30)",
+                    max_chars=10,
+                ),
+                "delivery_modality": st.column_config.SelectboxColumn(
+                    "Delivery Modality",
+                    help="Select delivery modality",
+                    options=["in-person", "virtual", "hybrid"],
+                ),
+                "length_of_training": st.column_config.SelectboxColumn(
+                    "Length of Training",
+                    help="Select length of training",
+                    options=["Short-term", "Long-term"],
+                ),
+                "total_participants": st.column_config.NumberColumn(
+                    "Total Participants",
+                    help="Edit total participants",
+                    min_value=0,
+                    step=1,
+                    format="%d"
+                ),
+                "male_participants": st.column_config.NumberColumn(
+                    "Male Participants",
+                    help="Edit male participants",
+                    min_value=0, 
+                    step=1,
+                    format="%d"
+                ),
+                "female_participants": st.column_config.NumberColumn(
+                    "Female Participants",
+                    help="Edit female participants", 
+                    min_value=0,
+                    step=1,
+                    format="%d"
+                ),
+                "non_binary_participants": st.column_config.NumberColumn(
+                    "Non-binary Participants",
+                    help="Edit non-binary participants",
+                    min_value=0,
+                    step=1, 
+                    format="%d"
+                ),
+                "degree": st.column_config.SelectboxColumn(
+                    "Degree",
+                    help="Select degree level",
+                    options=["PhD", "MSc", "BSc", "Other"],
+                ),
+                "trainee_name": st.column_config.TextColumn(
+                    "Trainee Name",
+                    help="Edit trainee name",
+                    max_chars=200,
+                ),
+                "trainee_gender": st.column_config.SelectboxColumn(
+                    "Trainee Gender", 
+                    help="Select trainee gender",
+                    options=["male", "female", "non-binary"],
+                ),
+                "geoscope_level": st.column_config.SelectboxColumn(
+                    "Geoscope Level",
+                    help="Select geographic scope",
+                    options=["Global", "Regional", "National", "Sub-national", "This is yet to be determined"],
+                ),
+                "keywords": st.column_config.TextColumn(
+                    "Keywords",
+                    help="Edit keywords (comma-separated)",
+                    max_chars=500,
+                ),
+                "main_contact_person.name": st.column_config.TextColumn(
+                    "Main Contact Name",
+                    help="Edit main contact person name",
+                    max_chars=200,
+                ),
+                "main_contact_person.code": st.column_config.TextColumn(
+                    "Main Contact Code",
+                    help="Edit main contact person code",
+                    max_chars=100,
+                ),
+                "main_contact_person.similarity_score": st.column_config.NumberColumn(
+                    "Main Contact Similarity",
+                    help="Edit main contact similarity score",
+                    min_value=0.0,
+                    max_value=100.0,
+                ),
+                "training_supervisor.name": st.column_config.TextColumn(
+                    "Training Supervisor",
+                    help="Edit training supervisor name", 
+                    max_chars=200,
+                ),
+                "training_supervisor.code": st.column_config.TextColumn(
+                    "Training Supervisor Code",
+                    help="Edit training supervisor code",
+                    max_chars=100,
+                ),
+                "training_supervisor.similarity_score": st.column_config.NumberColumn(
+                    "Supervisor Similarity",
+                    help="Edit training supervisor similarity score",
+                    min_value=0.0,
+                    max_value=100.0,
+                ),
+                "trainee_affiliation.affiliation_name": st.column_config.TextColumn(
+                    "Trainee Affiliation",
+                    help="Edit trainee affiliation",
+                    max_chars=300,
+                ),
+                "trainee_affiliation.institution_id": st.column_config.TextColumn(
+                    "Trainee affiliation ID",
+                    help="Edit institution ID",
+                    max_chars=100,
+                ),
+                "trainee_affiliation.similarity_score": st.column_config.NumberColumn(
+                    "Affiliation Similarity",
+                    help="Edit trainee affiliation similarity score",
+                    min_value=0.0,
+                    max_value=100.0,
+                ),
+                "language.name": st.column_config.TextColumn(
+                    "Language",
+                    help="Edit language name",
+                    max_chars=100,
+                ),
+                "language.code": st.column_config.TextColumn(
+                    "Language Code",
+                    help="Edit language code",
+                    max_chars=10,
+                ),
+                "partners": st.column_config.TextColumn(
+                    "Partners",
+                    help="Edit partners (JSON format)",
+                    max_chars=1000,
+                ),
+                "countries": st.column_config.TextColumn(
+                    "Countries", 
+                    help="Edit countries (JSON format)",
+                    max_chars=500,
+                ),
+                "regions": st.column_config.TextColumn(
+                    "Regions",
+                    help="Edit regions (JSON format)", 
+                    max_chars=500,
+                ),
+                "evidences": st.column_config.TextColumn(
+                    "Evidences",
+                    help="Edit evidences (JSON format)",
+                    max_chars=2000,
+                ),
+                "trainee_nationality.code": st.column_config.TextColumn(
+                    "Trainee Nationality Code",
+                    help="Edit trainee nationality code",
+                    max_chars=10,
+                ),
+            }
             
             edited_df = st.data_editor(
                 df_display,
                 use_container_width=True,
                 hide_index=True,
-                column_config={
-                    "Select": st.column_config.CheckboxColumn(
-                        "Select",
-                        help="Select records to submit to STAR",
-                        default=False,
-                    ),
-                    "title": st.column_config.TextColumn(
-                        "title",
-                        help="Edit the title of the record",
-                        max_chars=500,
-                    )
-                },
-                disabled=[col for col in df_display.columns if col not in ["Select", "title"]],
+                column_config=column_config,
                 key="data_editor"
             )
             
@@ -303,8 +530,7 @@ def _render_results(result: Dict, df: pd.DataFrame, elapsed: float) -> None:
                 else:
                     selected_results = []
                     for idx in selected_indices:
-                        result = original_results[idx].copy()
-                        result["title"] = edited_df.iloc[idx]["title"]
+                        result = build_result_from_edited_row(edited_df.iloc[idx], original_results[idx])
                         selected_results.append(result)
                     
                     try:
@@ -334,29 +560,6 @@ def _render_results(result: Dict, df: pd.DataFrame, elapsed: float) -> None:
             st.dataframe(df, use_container_width=True, hide_index=True)
     else:
         st.dataframe(df, use_container_width=True, hide_index=True)
-
-    # st.markdown("---")
-    # st.subheader("📥 Download Results")
-    # c1, c2 = st.columns(2)
-    # with c1:
-    #     json_bytes = json.dumps(result, ensure_ascii=False, indent=2).encode("utf-8")
-    #     st.download_button(
-    #         "⬇️ **Download JSON**",
-    #         data=json_bytes,
-    #         file_name="bulk_upload_result.json",
-    #         mime="application/json",
-    #         use_container_width=True
-    #     )
-    # with c2:
-    #     csv_buf = io.StringIO()
-    #     df.to_csv(csv_buf, index=False)
-    #     st.download_button(
-    #         "⬇️ **Download CSV**",
-    #         data=csv_buf.getvalue(),
-    #         file_name="bulk_upload_result.csv",
-    #         mime="text/csv",
-    #         use_container_width=True
-    #     )
 
     st.session_state["has_rendered_this_run"] = True
 
@@ -427,7 +630,6 @@ if project_type == "STAR":
         "star/text-mining/files/test/",
         "star/text-mining/files/prod/"
     ]
-    api_endpoint = "/star/text-mining"
 
 folder_path = st.sidebar.selectbox(
     "Base Folder",
@@ -435,7 +637,7 @@ folder_path = st.sidebar.selectbox(
     help="Select the base folder for document operations"
 )
 
-token = st.sidebar.text_input("Auth Token", value=AUTH_TOKEN_STAR, type="password")
+token = AUTH_TOKEN_STAR
 environment_url = st.sidebar.text_input("Environment URL", value="https://management-allianceindicatorstest.ciat.cgiar.org/api/")
 
 st.sidebar.markdown("---")

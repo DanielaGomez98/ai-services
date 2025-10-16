@@ -17,7 +17,7 @@ class InteractionClient:
         self,
         user_id: str,
         user_input: Optional[str],
-        ai_output: str,
+        ai_output: Optional[str],
         service_name: str = "text-mining",
         display_name: Optional[str] = None,
         service_description: Optional[str] = None,

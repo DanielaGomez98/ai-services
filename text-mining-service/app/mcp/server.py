@@ -77,14 +77,15 @@ async def process_document(bucket: str, key: str, token: Any, environmentUrl: st
             priority="Low"
         )
 
-        response = {
-            "json_content": result["json_content"]
-        }
-        
         if "interaction_id" in result:
-            response["interaction_id"] = result["interaction_id"]
+            response = {
+                "json_content": result["json_content"],
+                "interaction_id": result["interaction_id"]
+            }
 
-        return response
+            return response
+        else:
+            return result["json_content"]
 
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
@@ -126,14 +127,15 @@ async def process_document_prms(bucket: str, key: str, token: Any, environmentUr
             priority="Low"
         )
 
-        response = {
-            "json_content": result["json_content"]
-        }
-        
         if "interaction_id" in result:
-            response["interaction_id"] = result["interaction_id"]
+            response = {
+                "json_content": result["json_content"],
+                "interaction_id": result["interaction_id"]
+            }
 
-        return response
+            return response
+        else:
+            return result["json_content"]
 
     except Exception as e:
         logger.error(f"Unexpected error in PRMS processing: {str(e)}")
