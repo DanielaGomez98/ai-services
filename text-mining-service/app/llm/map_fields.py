@@ -30,7 +30,7 @@ def map_fields_with_opensearch(mining_result, mapping_service_url, max_retries=1
             response = requests.post(
                 f"{mapping_service_url}/map/fields",
                 json={"entries": entries},
-                timeout=300
+                timeout=600
             )
             response.raise_for_status()
 
