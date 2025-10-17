@@ -283,13 +283,12 @@ def extract_unmapped_institutions(results: List[Dict]) -> List[Dict]:
     Returns a list of unmapped institutions with their source information.
     """
     unmapped_institutions = []
-    seen_institutions = set()  # ✅ AGREGAR: Set para evitar duplicados
+    seen_institutions = set()
     
     for idx, result in enumerate(results):
         record_id = f"Record_{idx + 1}"
         title = result.get("title", "Unknown Title")
         
-        # Solo revisar partners SI existe en el resultado
         if "partners" in result:
             partners = result.get("partners", [])
             if isinstance(partners, list):
@@ -299,9 +298,7 @@ def extract_unmapped_institutions(results: List[Dict]) -> List[Dict]:
                         similarity_score = partner.get("similarity_score", 0)
                         institution_name = partner.get("institution_name", "Unknown Institution")
                         
-                        # Check if unmapped (null ID and 0 similarity)
                         if institution_id is None and similarity_score == 0:
-                            # ✅ CAMBIO: Verificar si ya existe por nombre
                             institution_key = institution_name.lower().strip()
                             
                             if institution_key not in seen_institutions:
@@ -316,7 +313,6 @@ def extract_unmapped_institutions(results: List[Dict]) -> List[Dict]:
                                     "similarity_score": similarity_score
                                 })
         
-        # Solo revisar trainee_affiliation SI existe en el resultado
         if "trainee_affiliation" in result:
             trainee_affiliation = result.get("trainee_affiliation", {})
             if isinstance(trainee_affiliation, dict):
@@ -324,9 +320,7 @@ def extract_unmapped_institutions(results: List[Dict]) -> List[Dict]:
                 similarity_score = trainee_affiliation.get("similarity_score", 0)
                 affiliation_name = trainee_affiliation.get("affiliation_name", "Unknown Affiliation")
                 
-                # Check if unmapped (null ID and 0 similarity)
                 if institution_id is None and similarity_score == 0:
-                    # ✅ CAMBIO: Verificar si ya existe por nombre
                     institution_key = affiliation_name.lower().strip()
                     
                     if institution_key not in seen_institutions:
@@ -353,7 +347,6 @@ def create_unmapped_report_csv(unmapped_institutions: List[Dict]) -> str:
     
     df = pd.DataFrame(unmapped_institutions)
     
-    # Reorder columns for better readability
     column_order = [
         "record_id", 
         "record_title", 
@@ -382,18 +375,15 @@ def _render_results(result: Dict, df: pd.DataFrame, elapsed: float) -> None:
         if original_results:
             st.subheader("🏢 Institution Mapping Report")
             
-            # Extraer instituciones no mapeadas
             unmapped_institutions = extract_unmapped_institutions(original_results)
             
             if unmapped_institutions:
                 st.warning(f"⚠️ Found {len(unmapped_institutions)} unmapped institutions")
                 
-                # Mostrar preview de instituciones no mapeadas
                 with st.expander("🔍 View unmapped institutions", expanded=False):
                     unmapped_df = pd.DataFrame(unmapped_institutions)
                     st.dataframe(unmapped_df, use_container_width=True)
                 
-                # Botón de descarga
                 csv_content = create_unmapped_report_csv(unmapped_institutions)
                 
                 st.download_button(
@@ -941,11 +931,3 @@ if run_btn:
 # -------------------------
 if not st.session_state.get("has_rendered_this_run") and st.session_state.get("last_df") is not None:
     _render_results(st.session_state["last_result"], st.session_state["last_df"], st.session_state["last_elapsed"])
-
-
-# =========================
-# Footer
-# =========================
-st.markdown("#")
-st.markdown("---")
-st.caption("© Bulk Upload Service - Demo UI. Built with ❤️ in Streamlit.")
