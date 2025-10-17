@@ -4,7 +4,7 @@ from app.utils.logger.logger_util import get_logger
 
 logger = get_logger()
 
-def map_fields_with_opensearch(mining_result, mapping_service_url, max_retries=3, retry_delay=2):
+def map_fields_with_opensearch(mining_result, mapping_service_url, max_retries=10, retry_delay=4):
     entries = []
 
     if contact := mining_result.get("main_contact_person", {}).get("name"):

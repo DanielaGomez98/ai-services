@@ -255,6 +255,7 @@ Do not:
 • Include markdown code blocks like ```json or ```.
 • Escape quotes unless necessary.
 • Wrap the JSON in additional quotes or strings.
+• Return values like "null", "N/A", "unknown", "not specified" or something similar for missing fields.
 • Include fields with null values - omit them completely.
 The response must be raw JSON only — nothing else.
 
