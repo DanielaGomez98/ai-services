@@ -13,7 +13,7 @@ def map_fields_with_opensearch(mining_result, mapping_service_url, max_retries=3
     if supervisor := mining_result.get("training_supervisor", {}).get("name"):
         entries.append({"value": supervisor, "type": "staff"})
 
-    if affiliation := mining_result.get("trainee_affiliation", {}).get("affiliation_name"):
+    if affiliation := mining_result.get("trainee_affiliation", {}).get("institution_name"):
         entries.append({"value": affiliation, "type": "institution"})
 
     for partner in mining_result.get("partners", []):
@@ -87,7 +87,7 @@ def _apply_mapped_results(mining_result, mapped_dict):
             mining_result["training_supervisor"]["code"] = m.get("mapped_id")
             mining_result["training_supervisor"]["similarity_score"] = m.get("score", 0)
 
-    if affiliation := mining_result.get("trainee_affiliation", {}).get("affiliation_name"):
+    if affiliation := mining_result.get("trainee_affiliation", {}).get("institution_name"):
         key = (affiliation, "institution")
         if key in mapped_dict:
             m = mapped_dict[key]
@@ -116,7 +116,7 @@ def _apply_default_values(mining_result):
         if "similarity_score" not in mining_result["training_supervisor"]:
             mining_result["training_supervisor"]["similarity_score"] = 0
 
-    if "trainee_affiliation" in mining_result and mining_result["trainee_affiliation"].get("affiliation_name"):
+    if "trainee_affiliation" in mining_result and mining_result["trainee_affiliation"].get("institution_name"):
         if "institution_id" not in mining_result["trainee_affiliation"]:
             mining_result["trainee_affiliation"]["institution_id"] = None
         if "similarity_score" not in mining_result["trainee_affiliation"]:

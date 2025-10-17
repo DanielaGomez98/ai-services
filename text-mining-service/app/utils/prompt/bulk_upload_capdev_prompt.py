@@ -150,7 +150,7 @@ Trainee affiliation
     • Refers to the organization or group that the trainee belongs to.
     • Only include the "trainee_affiliation" field if the training_type is "Individual training".
     • Return this field as an object with the following structure:
-        {"affiliation_name": "<name of the affiliation>"}
+        {"institution_name": "<name of the affiliation>"}
     • If the document does not provide enough detail, do not return the trainee_affiliation field in the output JSON.
 
 Trainee name
@@ -290,7 +290,7 @@ Follow this exact structure:
             "training_purpose": "<value (only if group training)>",
             "degree": "<value (only if length_of_training is Long-term or training_type is Individual training)>",
             "trainee_affiliation": {
-                "affiliation_name": "<value (only if individual training)>"
+                "institution_name": "<value (only if individual training)>"
             },
             "trainee_name": "<value (only if individual training)>",
             "trainee_nationality": {

@@ -233,7 +233,7 @@ def build_result_from_edited_row(edited_row: pd.Series, original_result: Dict) -
         "training_supervisor.name": ("training_supervisor", "name"),
         "training_supervisor.code": ("training_supervisor", "code"),
         "training_supervisor.similarity_score": ("training_supervisor", "similarity_score"),
-        "trainee_affiliation.affiliation_name": ("trainee_affiliation", "affiliation_name"),
+        "trainee_affiliation.institution_name": ("trainee_affiliation", "institution_name"),
         "trainee_affiliation.institution_id": ("trainee_affiliation", "institution_id"),
         "trainee_affiliation.similarity_score": ("trainee_affiliation", "similarity_score"),
         "language.name": ("language", "name"),
@@ -318,7 +318,7 @@ def extract_unmapped_institutions(results: List[Dict]) -> List[Dict]:
             if isinstance(trainee_affiliation, dict):
                 institution_id = trainee_affiliation.get("institution_id")
                 similarity_score = trainee_affiliation.get("similarity_score", 0)
-                affiliation_name = trainee_affiliation.get("affiliation_name", "Unknown Affiliation")
+                affiliation_name = trainee_affiliation.get("institution_name", "Unknown Affiliation")
                 
                 if institution_id is None and similarity_score == 0:
                     institution_key = affiliation_name.lower().strip()
@@ -590,7 +590,7 @@ def _render_results(result: Dict, df: pd.DataFrame, elapsed: float) -> None:
                     min_value=0.0,
                     max_value=100.0,
                 ),
-                "trainee_affiliation.affiliation_name": st.column_config.TextColumn(
+                "trainee_affiliation.institution_name": st.column_config.TextColumn(
                     "Trainee Affiliation",
                     help="Edit trainee affiliation",
                     max_chars=300,
