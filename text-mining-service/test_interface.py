@@ -2,12 +2,32 @@ import io
 import json
 import time
 import boto3
+import base64
 import requests
 import pandas as pd
 import streamlit as st
 from typing import Optional, List, Dict
 from botocore.exceptions import BotoCoreError, ClientError
-from app.utils.config.config_util import AWS, AUTH_TOKEN_STAR
+from app.utils.config.config_util import AWS, CLIENT_ID, CLIENT_SECRET
+
+
+# =========================
+# Auth token generation
+# =========================
+def generate_auth_token(client_id: str, client_secret: str) -> str:
+    """Generate base64 encoded auth token from client credentials"""
+    credentials = {
+        "client_id": client_id,
+        "client_secret": client_secret
+    }
+    
+    json_string = json.dumps(credentials)
+    
+    encoded_bytes = base64.b64encode(json_string.encode('utf-8'))
+    
+    return encoded_bytes.decode('utf-8')
+
+AUTH_TOKEN = generate_auth_token(CLIENT_ID, CLIENT_SECRET)
 
 # =========================
 # Page config & styles
@@ -252,19 +272,144 @@ def build_result_from_edited_row(edited_row: pd.Series, original_result: Dict) -
     return result
 
 
+def extract_unmapped_institutions(results: List[Dict]) -> List[Dict]:
+    """
+    Extract institutions that were not properly mapped (institution_id = null and similarity_score = 0)
+    from partners and trainee_affiliation fields.
+    
+    Only checks fields that actually exist in the JSON results.
+    Avoids duplicates based on institution name.
+    
+    Returns a list of unmapped institutions with their source information.
+    """
+    unmapped_institutions = []
+    seen_institutions = set()  # ✅ AGREGAR: Set para evitar duplicados
+    
+    for idx, result in enumerate(results):
+        record_id = f"Record_{idx + 1}"
+        title = result.get("title", "Unknown Title")
+        
+        # Solo revisar partners SI existe en el resultado
+        if "partners" in result:
+            partners = result.get("partners", [])
+            if isinstance(partners, list):
+                for partner_idx, partner in enumerate(partners):
+                    if isinstance(partner, dict):
+                        institution_id = partner.get("institution_id")
+                        similarity_score = partner.get("similarity_score", 0)
+                        institution_name = partner.get("institution_name", "Unknown Institution")
+                        
+                        # Check if unmapped (null ID and 0 similarity)
+                        if institution_id is None and similarity_score == 0:
+                            # ✅ CAMBIO: Verificar si ya existe por nombre
+                            institution_key = institution_name.lower().strip()
+                            
+                            if institution_key not in seen_institutions:
+                                seen_institutions.add(institution_key)
+                                unmapped_institutions.append({
+                                    "record_id": record_id,
+                                    "record_title": title,
+                                    "source_field": "partners",
+                                    "partner_index": partner_idx + 1,
+                                    "institution_name": institution_name,
+                                    "institution_id": institution_id,
+                                    "similarity_score": similarity_score
+                                })
+        
+        # Solo revisar trainee_affiliation SI existe en el resultado
+        if "trainee_affiliation" in result:
+            trainee_affiliation = result.get("trainee_affiliation", {})
+            if isinstance(trainee_affiliation, dict):
+                institution_id = trainee_affiliation.get("institution_id")
+                similarity_score = trainee_affiliation.get("similarity_score", 0)
+                affiliation_name = trainee_affiliation.get("affiliation_name", "Unknown Affiliation")
+                
+                # Check if unmapped (null ID and 0 similarity)
+                if institution_id is None and similarity_score == 0:
+                    # ✅ CAMBIO: Verificar si ya existe por nombre
+                    institution_key = affiliation_name.lower().strip()
+                    
+                    if institution_key not in seen_institutions:
+                        seen_institutions.add(institution_key)
+                        unmapped_institutions.append({
+                            "record_id": record_id,
+                            "record_title": title,
+                            "source_field": "trainee_affiliation",
+                            "partner_index": None,
+                            "institution_name": affiliation_name,
+                            "institution_id": institution_id,
+                            "similarity_score": similarity_score
+                        })
+    
+    return unmapped_institutions
+
+
+def create_unmapped_report_csv(unmapped_institutions: List[Dict]) -> str:
+    """Convert unmapped institutions list to CSV format"""
+    if not unmapped_institutions:
+        return "No unmapped institutions found."
+    
+    import pandas as pd
+    
+    df = pd.DataFrame(unmapped_institutions)
+    
+    # Reorder columns for better readability
+    column_order = [
+        "record_id", 
+        "record_title", 
+        "source_field", 
+        "institution_name", 
+        "institution_id", 
+        "similarity_score",
+        "partner_index"
+    ]
+    
+    df = df[column_order]
+    
+    return df.to_csv(index=False)
+
+
 def _render_results(result: Dict, df: pd.DataFrame, elapsed: float) -> None:
     st.success(f"Processed successfully! ⏱️ {elapsed:.2f}s")
 
     with st.expander("🔎 **Raw JSON output**", expanded=False):
         st.json(result)
 
-    st.subheader("📊 Results")
-    
     if not df.empty:
         payload = extract_inner_results_json(result)
         original_results = payload.get("results", [])
         
-        if original_results:            
+        if original_results:
+            st.subheader("🏢 Institution Mapping Report")
+            
+            # Extraer instituciones no mapeadas
+            unmapped_institutions = extract_unmapped_institutions(original_results)
+            
+            if unmapped_institutions:
+                st.warning(f"⚠️ Found {len(unmapped_institutions)} unmapped institutions")
+                
+                # Mostrar preview de instituciones no mapeadas
+                with st.expander("🔍 View unmapped institutions", expanded=False):
+                    unmapped_df = pd.DataFrame(unmapped_institutions)
+                    st.dataframe(unmapped_df, use_container_width=True)
+                
+                # Botón de descarga
+                csv_content = create_unmapped_report_csv(unmapped_institutions)
+                
+                st.download_button(
+                    label="📥 Download Unmapped Institutions Report",
+                    data=csv_content,
+                    file_name=f"unmapped_institutions_{time.strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv",
+                    help="Download CSV report of institutions that could not be mapped",
+                    use_container_width=True
+                )
+            else:
+                st.success("✅ All institutions were successfully mapped!")
+
+            st.markdown("---")
+
+            st.subheader("📊 Results")
             st.markdown("**Select records to submit to STAR platform:**")
             
             col1, col2, col3 = st.columns([1, 2, 2])
@@ -556,6 +701,7 @@ def _render_results(result: Dict, df: pd.DataFrame, elapsed: float) -> None:
                         st.error(f"❌ Error submitting to STAR: {str(e)}")
                         with st.expander("🔍 Error Details", expanded=False):
                             st.code(str(e))
+        
         else:
             st.dataframe(df, use_container_width=True, hide_index=True)
     else:
@@ -637,7 +783,7 @@ folder_path = st.sidebar.selectbox(
     help="Select the base folder for document operations"
 )
 
-token = AUTH_TOKEN_STAR
+token = AUTH_TOKEN
 environment_url = st.sidebar.text_input("Environment URL", value="https://management-allianceindicatorstest.ciat.cgiar.org/api/")
 
 st.sidebar.markdown("---")

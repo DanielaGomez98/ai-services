@@ -247,7 +247,8 @@ def process_document(bucket_name, file_key, prompt=DEFAULT_PROMPT_STAR, user_id:
                 tracking_context = {
                     "bucket_name": bucket_name,
                     "file_key": file_key,
-                    "prompt_used": prompt,
+                    "prompt_used": prompt[:500] + "..." if len(prompt) > 500 else prompt,
+                    "prompt_full_length": len(prompt),
                     "chunks_processed": len(chunks),
                     "results_count": len(json_content.get("results", [])),
                     "model_used": "claude-4-sonnet",
@@ -359,7 +360,8 @@ def process_document_prms(bucket_name, file_key, prompt=DEFAULT_PROMPT_PRMS, use
                 tracking_context = {
                     "bucket_name": bucket_name,
                     "file_key": file_key,
-                    "prompt_used": prompt,
+                    "prompt_used": prompt[:500] + "..." if len(prompt) > 500 else prompt,
+                    "prompt_full_length": len(prompt),
                     "chunks_processed": len(chunks),
                     "results_count": len(json_content.get("results", [])),
                     "model_used": "claude-4-sonnet",

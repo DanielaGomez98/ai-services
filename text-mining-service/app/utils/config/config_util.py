@@ -16,4 +16,7 @@ PRMS_BUCKET_KEY_NAME = os.getenv("PRMS_BUCKET_KEY_NAME")
 
 MAPPING_URL = os.getenv("MAPPING_URL")
 
-AUTH_TOKEN_STAR = os.getenv("AUTH_TOKEN_STAR")
+AUTH_TOKEN_STAR = os.getenv("AUTH_TOKEN_STAR", None)
+
+CLIENT_ID = os.getenv("CLIENT_ID", None)
+CLIENT_SECRET = os.getenv("CLIENT_SECRET", None)
