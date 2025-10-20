@@ -595,10 +595,12 @@ def _render_results(result: Dict, df: pd.DataFrame, elapsed: float) -> None:
                     help="Edit trainee affiliation",
                     max_chars=300,
                 ),
-                "trainee_affiliation.institution_id": st.column_config.TextColumn(
-                    "Trainee affiliation ID",
+                "trainee_affiliation.institution_id": st.column_config.NumberColumn(
+                    "Trainee Affiliation ID",
                     help="Edit institution ID",
-                    max_chars=100,
+                    min_value=0,
+                    step=1,
+                    format="%d"
                 ),
                 "trainee_affiliation.similarity_score": st.column_config.NumberColumn(
                     "Affiliation Similarity",
