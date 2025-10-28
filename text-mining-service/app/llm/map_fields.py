@@ -47,7 +47,7 @@ def map_fields_with_opensearch(mining_result, mapping_service_url, max_retries=1
             return mining_result
         
         except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 503:
+            if e.response.status_code in [500, 502, 503, 504]:
                 if attempt < max_retries - 1:
                     wait_time = retry_delay * (2 ** attempt)
                     logger.warning(f"⚠️ Service unavailable (503), retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")

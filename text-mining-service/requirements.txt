@@ -8,6 +8,7 @@ openpyxl
 lancedb
 python-dotenv
 langchain
+langchain-text-splitters
 pyjwt
 aiohttp
 requests

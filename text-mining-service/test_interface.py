@@ -598,9 +598,7 @@ def _render_results(result: Dict, df: pd.DataFrame, elapsed: float) -> None:
                 "trainee_affiliation.institution_id": st.column_config.NumberColumn(
                     "Trainee Affiliation ID",
                     help="Edit institution ID",
-                    min_value=0,
-                    step=1,
-                    format="%d"
+                    min_value=0
                 ),
                 "trainee_affiliation.similarity_score": st.column_config.NumberColumn(
                     "Affiliation Similarity",

@@ -7,7 +7,7 @@ from app.utils.s3.s3_util import read_document_from_s3
 from app.llm.map_fields import map_fields_with_opensearch
 from app.utils.prompt.prompt_star import DEFAULT_PROMPT_STAR
 from app.utils.prompt.prompt_prms import DEFAULT_PROMPT_PRMS
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.utils.interactions.interaction_client import interaction_client
 from app.utils.config.config_util import AWS, STAR_BUCKET_KEY_NAME, PRMS_BUCKET_KEY_NAME, MAPPING_URL
 from app.schemas.mining_schemas import MiningResponse, ErrorResponse, InnovationDevelopmentResult, PolicyChangeResult, CapacityDevelopmentResult
@@ -300,7 +300,7 @@ def process_document(bucket_name, file_key, prompt=DEFAULT_PROMPT_STAR, user_id:
 def process_document_prms(bucket_name, file_key, prompt=DEFAULT_PROMPT_PRMS, user_id: str = None):
     """Process document for PRMS project - identical functionality to process_document"""
     start_time = time.time()
-    print(f"PRMS Processing: {prompt}")
+    logger.info(f"PRMS Processing: {prompt}")
 
     try:
         reference_file_regions = f"{PRMS_BUCKET_KEY_NAME}/clarisa_regions.xlsx"
