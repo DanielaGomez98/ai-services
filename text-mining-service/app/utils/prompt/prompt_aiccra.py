@@ -269,10 +269,14 @@ Follow this exact structure:
                     "gender_age": "<[array of values] or null>"
                 }
             ],
-            "organizations": "<[array of organization names] or null (only if anticipated_users is 'Users have been determined'>",
-            "organization_type": "<[array of organization types] or null (only if anticipated_users is 'Users have been determined'>",
-            "organization_sub_type": "<value or 'Not collected'>",
-            "other_organization_type": "<value or 'Not collected' (only if organization_type is 'Other'>"
+            "organizations_detailed": [
+                {
+                    "name": "<organization name or 'Not collected' (only if anticipated_users is 'Users have been determined' and indicator is 'Innovation Development')>",
+                    "type": "<value(s) or 'Other' (only if anticipated_users is 'Users have been determined' and indicator is 'Innovation Development')>",
+                    "sub_type": "<value or 'Not collected' (only if indicator is 'Innovation Development')>",
+                    "other_type": "<value or 'Not collected' (only if type is 'Other' and indicator is 'Innovation Development'; omit otherwise)>"
+                }
+            ]
         }
     ]
 }

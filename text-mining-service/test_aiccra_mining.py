@@ -140,17 +140,64 @@ def _render_results(result: Dict, df: pd.DataFrame, elapsed: float) -> None:
         st.json(result)
 
     if not df.empty:
-        payload = extract_inner_results_json(result)
+        payload = st.session_state.get("last_payload", {})
         original_results = payload.get("results", [])
         
         if original_results:
-            st.subheader("📊 Results")
-            st.info(f"📊 Found {len(original_results)} records")
+            st.info(f"📍 Found {len(original_results)} results")
 
-            st.dataframe(df, use_container_width=True, hide_index=True)
-            
+            field_mapping = {
+                "indicator": "Indicator",
+                "title": "Result title",
+                "short_title": "Short result title",
+                "description": "Description",
+                "main_contact_person": "Main contact person",
+                "keywords": "Keywords",
+                "geoscope_level": "Geoscope level",
+                "regions": "Regions codes",
+                "countries": "Countries codes",
+                "innovation_nature": "Innovation nature",
+                "innovation_type": "Innovation type",
+                "assess_readiness": "Readiness level",
+                "anticipated_users": "Anticipated users",
+                "innovation_actors_detailed": "Actors",
+                "organizations_detailed": "Organizations"
+            }
+
+            for i, res in enumerate(original_results, 1):
+                st.subheader(f"**📊 Result {i}:**")
+                for field, label in field_mapping.items():
+                    value = res.get(field)
+                    if value is not None:
+                        if field == "keywords" and isinstance(value, list):
+                            keywords_str = ", ".join(value)
+                            st.markdown(f"- **{label}**: {keywords_str}")
+                        elif (field == "innovation_actors_detailed" and isinstance(value, list)) or (field == "organizations_detailed" and isinstance(value, list)):
+                            st.markdown(f"- **{label}**:")
+                            df_table = pd.DataFrame(value)
+                            if field == "innovation_actors_detailed":
+                                df_table.rename(columns={
+                                    "name": "Actor name",
+                                    "type": "Type",
+                                    "gender_age": "Gender/Age",
+                                    "other_actor_type": "Other type"
+                                }, inplace=True)
+                            elif field == "organizations_detailed":
+                                df_table.rename(columns={
+                                    "name": "Organization name",
+                                    "type": "Organization type",
+                                    "sub_type": "Organization sub-type",
+                                    "other_type": "Other type"
+                                }, inplace=True)
+                            st.dataframe(df_table, width='content', hide_index=True)
+                        elif isinstance(value, (list, dict)):
+                            value = json.dumps(value, ensure_ascii=False, indent=2)
+                            st.markdown(f"- **{label}**: {value}")
+                        else:
+                            st.markdown(f"- **{label}**: {value}")
+                st.markdown("---")
     else:
-        st.warning(f"⚠️ No results found.")
+        st.warning("⚠️ No results found.")
 
     st.session_state["has_rendered_this_run"] = True
 
@@ -198,32 +245,12 @@ def post_to_api(
 # =========================
 st.sidebar.title("⚙️ Settings")
 
-api_base_url = st.sidebar.text_input(
-    "FastAPI Base URL",
-    value="https://oxnrkcntlheycdgcnilexrwp4i0tucqz.lambda-url.us-east-1.on.aws",
-    help="Your FastAPI service URL (defaults to https://oxnrkcntlheycdgcnilexrwp4i0tucqz.lambda-url.us-east-1.on.aws)."
-)
-bucket = st.sidebar.text_input("S3 Bucket", value="ai-services-ibd")
-
-project_type = st.sidebar.selectbox(
-    "Project Type",
-    options=["AICCRA"],
-    help="Select the project type to determine the correct folder structure"
-)
+api_base_url = "https://oxnrkcntlheycdgcnilexrwp4i0tucqz.lambda-url.us-east-1.on.aws"   # http://localhost:8000
+bucket = "ai-services-ibd"
+project_type ="AICCRA"
 
 if project_type == "AICCRA":
-    base_folders = [
-        "aiccra/text-mining/files/test/",
-        "aiccra/text-mining/files/prod/"
-    ]
-
-folder_path = st.sidebar.selectbox(
-    "Base Folder",
-    options=base_folders,
-    help="Select the base folder for document operations"
-)
-
-st.sidebar.markdown("---")
+    folder_path = "aiccra/text-mining/files/test/"
 
 email = st.sidebar.text_input(
     "👤 User Email",
@@ -291,7 +318,7 @@ with col_left:
 
 with col_right:
     st.markdown("####")
-    run_btn = st.button("🚀 Process document", type="primary", use_container_width=True)
+    run_btn = st.button("🚀 Process document", type="primary", width='stretch')
     st.caption("_Tip: Filter by prefix to quickly find your files._")
 
 
