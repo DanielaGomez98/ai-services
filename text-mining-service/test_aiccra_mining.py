@@ -189,7 +189,7 @@ def _render_results(result: Dict, df: pd.DataFrame, elapsed: float) -> None:
                                     "sub_type": "Organization sub-type",
                                     "other_type": "Other type"
                                 }, inplace=True)
-                            st.dataframe(df_table, width='content', hide_index=True)
+                            st.dataframe(df_table, use_container_width=False, hide_index=True)
                         elif isinstance(value, (list, dict)):
                             value = json.dumps(value, ensure_ascii=False, indent=2)
                             st.markdown(f"- **{label}**: {value}")
