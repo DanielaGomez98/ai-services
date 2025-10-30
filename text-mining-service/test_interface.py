@@ -747,7 +747,7 @@ def post_to_api(
 # =========================
 # Config
 # =========================
-api_base_url = "https://oxnrkcntlheycdgcnilexrwp4i0tucqz.lambda-url.us-east-1.on.aws",
+api_base_url = "https://oxnrkcntlheycdgcnilexrwp4i0tucqz.lambda-url.us-east-1.on.aws"
 # api_base_url = "http://localhost:8000"
 bucket = "ai-services-ibd"
 project_type = "STAR"
