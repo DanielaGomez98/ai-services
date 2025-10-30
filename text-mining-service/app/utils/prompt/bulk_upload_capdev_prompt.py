@@ -52,10 +52,9 @@ Keywords
 
 Reporting Project
     • Refers to the specific project being reported on and contributing to the result. 
-    • Extract and split the project code and name into the following fields:
+    • Extract the project code into the following field:
         • contract_code
-        • contract_name
-    • If no project code or name is mentioned, return an empty string in the output JSON.
+    • If no project code is mentioned, return an empty string in the output JSON.
 
 Contribution to SDG targets:
     • sdg_targets
