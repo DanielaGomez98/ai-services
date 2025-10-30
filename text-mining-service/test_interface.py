@@ -745,39 +745,18 @@ def post_to_api(
 
 
 # =========================
-# Sidebar
+# Config
 # =========================
-st.sidebar.title("⚙️ Settings")
-api_base_url = st.sidebar.text_input(
-    "FastAPI Base URL",
-    value="https://oxnrkcntlheycdgcnilexrwp4i0tucqz.lambda-url.us-east-1.on.aws",
-    help="Your FastAPI service URL (defaults to https://oxnrkcntlheycdgcnilexrwp4i0tucqz.lambda-url.us-east-1.on.aws)."
-)
-bucket = st.sidebar.text_input("S3 Bucket", value="ai-services-ibd")
-
-project_type = st.sidebar.selectbox(
-    "Project Type",
-    options=["STAR"],
-    help="Select the project type to determine the correct folder structure"
-)
+api_base_url = "https://oxnrkcntlheycdgcnilexrwp4i0tucqz.lambda-url.us-east-1.on.aws",
+# api_base_url = "http://localhost:8000"
+bucket = "ai-services-ibd"
+project_type = "STAR"
 
 if project_type == "STAR":
-    base_folders = [
-        "star/text-mining/files/test/",
-        "star/text-mining/files/prod/"
-    ]
-
-folder_path = st.sidebar.selectbox(
-    "Base Folder",
-    options=base_folders,
-    help="Select the base folder for document operations"
-)
+    folder_path = "star/text-mining/files/test/"  # "star/text-mining/files/prod/"
 
 token = AUTH_TOKEN
-environment_url = st.sidebar.text_input("Environment URL", value="https://management-allianceindicatorstest.ciat.cgiar.org/api/")
-
-st.sidebar.markdown("---")
-st.sidebar.caption("*AWS credentials are taken from your environment. Ensure `boto3` is authorized.*")
+environment_url = "https://management-allianceindicatorstest.ciat.cgiar.org/api/"
 
 
 # =========================

@@ -243,6 +243,7 @@ Required and mandatory fields:
 • indicator
 • title
 • description
+• year
 • keywords
 • contract_code
 • training_type
