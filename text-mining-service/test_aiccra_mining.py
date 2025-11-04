@@ -262,6 +262,8 @@ email = st.sidebar.text_input(
 # =========================
 # Main
 # =========================
+st.warning("⚠️ This service uses artificial intelligence (AI) to generate responses based on structured data and program documentation. While the system is designed to ensure accuracy and relevance, the content produced may contain errors or omissions and should not be considered a substitute for official reports or expert review. Users are advised to validate key information before using it for decision-making or external communication.")
+
 st.title("🧠 AICCRA - Text Mining Service")
 st.markdown("**Upload a document or select one from S3, send it to the text-mining service, and visualize results.**")
 

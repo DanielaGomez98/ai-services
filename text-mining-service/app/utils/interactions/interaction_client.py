@@ -5,7 +5,7 @@ from app.utils.logger.logger_util import get_logger
 
 logger = get_logger()
 
-INTERACTION_SERVICE_URL = "https://i8s5i8c21i.execute-api.us-east-1.amazonaws.com"
+INTERACTION_SERVICE_URL = "https://clv3b6bv9d.execute-api.us-east-1.amazonaws.com"
 
 class InteractionClient:
     """Client for interacting with the external interaction service."""
