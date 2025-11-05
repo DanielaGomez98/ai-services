@@ -1,15 +1,21 @@
 import os
 import json
+import boto3
 import uvicorn
 from typing import Optional, Union
 from pydantic import BaseModel, Field
 from mcp.client.stdio import stdio_client
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from app.utils.config.config_util import AWS
 from fastapi.middleware.cors import CORSMiddleware
 from app.utils.s3.s3_util import upload_file_to_s3
 from app.utils.logger.logger_util import get_logger
+from botocore.exceptions import BotoCoreError, ClientError
 from mcp import ClientSession, StdioServerParameters, types
 from fastapi import FastAPI, HTTPException, Body, UploadFile, File, Form
 from app.utils.config.config_util import STAR_BUCKET_KEY_NAME, PRMS_BUCKET_KEY_NAME, AICCRA_BUCKET_KEY_NAME
+from app.utils.prompt.prompt_aiccra import DEFAULT_PROMPT_AICCRA
 
 
 logger = get_logger()
@@ -40,6 +46,11 @@ class UploadResponse(BaseModel):
     key: str = Field(..., description="Key (path) of the uploaded file in S3")
     status: str = Field(..., description="Status of the upload operation")
     message: str = Field(..., description="Detailed message about the upload operation")
+
+class S3ListRequest(BaseModel):
+    bucket: str
+    prefix: str = ""
+    max_items: int = 1000
 
 
 app = FastAPI(
@@ -97,6 +108,57 @@ async def handle_sampling_message(message: types.CreateMessageRequestParams) -> 
         model="mock-model",
         stopReason="endTurn"
     )
+
+
+app.mount("/static", StaticFiles(directory="interface"), name="static")
+
+
+@app.get("/ui", tags=["AICCRA Project"])
+async def serve_ui_alt():
+    """Alternative endpoint for the UI"""
+    return FileResponse('interface/index.html')
+
+
+@app.get("/aiccra/prompt", tags=["AICCRA Project"])
+async def get_aiccra_prompt():
+    """Get the default AICCRA prompt template"""
+    return {
+        "status": "success",
+        "content": DEFAULT_PROMPT_AICCRA.strip(),
+        "source": "prompt_aiccra.py"
+    }
+
+
+@app.post("/list-s3-objects", tags=["AICCRA Project"])
+async def list_s3_objects(request: S3ListRequest):
+    """List objects in S3 bucket with given prefix, ordered by LastModified (desc)."""
+    try:
+        s3 = boto3.client("s3")
+        
+        paginator = s3.get_paginator("list_objects_v2")
+        pages = paginator.paginate(Bucket=request.bucket, Prefix=request.prefix)
+        
+        items = []
+        for page in pages:
+            for obj in page.get("Contents", []):
+                items.append((obj["Key"], obj["LastModified"]))
+                if len(items) >= request.max_items:
+                    break
+        
+        items.sort(key=lambda x: x[1], reverse=True)
+        objects = [k for k, _ in items]
+        
+        return {
+            "status": "success",
+            "objects": objects,
+            "count": len(objects)
+        }
+        
+    except (BotoCoreError, ClientError) as e:
+        raise HTTPException(status_code=500, detail=f"S3 listing error: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
 
 
 @app.post("/star/text-mining",
@@ -441,7 +503,7 @@ async def bulk_upload_capdev_endpoint(
           Processing Flow:
           1. Document validation and upload (if file provided)
           2. Document chunking and vectorization
-          3. AI analysis using Claude 4 Sonnet
+          3. AI analysis using Claude 4 Sonnet with custom or default prompt
           4. Structured data extraction
           
           Supported File Types:
@@ -450,6 +512,11 @@ async def bulk_upload_capdev_endpoint(
           - Excel spreadsheets (.xlsx, .xls)
           - PowerPoint presentations (.pptx, .ppt)
           - Plain text files (.txt)
+          
+          Custom Prompts:
+          - You can provide a custom prompt to guide the AI analysis
+          - If no prompt is provided, the default AICCRA prompt will be used
+          - Custom prompts allow for dynamic analysis based on specific requirements
           
           Note: You must provide either `key` (for existing S3 documents) or `file` (for upload), but not both.
           """,
@@ -474,6 +541,9 @@ async def process_document_aiccra_endpoint(
     ),
     user_id: Optional[str] = Form(
         None, description="User identifier for interaction tracking", examples=["user@example.com", "researcher@cgiar.org"]
+    ),
+    prompt: Optional[str] = Form(
+        None, description="Custom prompt for document analysis. If not provided, the default AICCRA prompt will be used", examples=["Extract all climate adaptation strategies mentioned in this document and categorize them by sector."]
     )
 ):
     """
@@ -540,6 +610,9 @@ async def process_document_aiccra_endpoint(
                 
                 if user_id:
                     mcp_arguments["user_id"] = user_id
+                
+                if prompt:
+                    mcp_arguments["prompt"] = prompt
 
                 result = await session.call_tool(
                     "process_document_aiccra",

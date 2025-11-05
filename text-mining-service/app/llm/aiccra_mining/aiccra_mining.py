@@ -16,11 +16,17 @@ from app.llm.vectorize import (get_embedding,
 
 logger = get_logger()
 
-def process_document_aiccra(bucket_name, file_key, prompt=DEFAULT_PROMPT_AICCRA, user_id: str = None):
+def process_document_aiccra(bucket_name, file_key, prompt, user_id: str = None):
     """Process document for AICCRA project"""
     start_time = time.time()
 
     try:
+        if prompt is None:
+            prompt = DEFAULT_PROMPT_AICCRA
+            logger.info("📝 Using default AICCRA prompt")
+        else:
+            logger.info(f"🎯 Using custom prompt (length: {len(prompt)})")
+
         reference_file_regions = f"{AICCRA_BUCKET_KEY_NAME}/clarisa_regions.xlsx"
         reference_file_countries = f"{AICCRA_BUCKET_KEY_NAME}/clarisa_countries.xlsx"
         initialize_reference_data(

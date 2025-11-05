@@ -200,15 +200,19 @@ async def process_document_capdev(bucket: str, key: str, token: Any, environment
 
 
 @mcp.tool()
-async def process_document_aiccra(bucket: str, key: str, token: Any, environmentUrl: Any, user_id: str = None) -> dict:
+async def process_document_aiccra(bucket: str, key: str, token: Any, environmentUrl: Any, user_id: str = None, prompt: str = None) -> dict:
     logger.info("✅ process_document_aiccra invoked via MCP")
 
     try:
         logger.info(f"Processing document: {key} from bucket: {bucket}")
         logger.info(f"👤 User ID for tracking: {user_id}")
+        if prompt:
+            logger.info(f"🎯 Using custom prompt: {prompt[:100]}..." if len(prompt) > 100 else f"🎯 Using custom prompt: {prompt}")
+        else:
+            logger.info("📝 Using default AICCRA prompt")
 
         result = process_with_llm_aiccra(
-            bucket_name=bucket, file_key=key, user_id=user_id)
+            bucket_name=bucket, file_key=key, user_id=user_id, prompt=prompt)
 
         await notification_service.send_slack_notification(
             emoji=":ai: :pick:",
