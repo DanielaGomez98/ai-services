@@ -59,15 +59,13 @@ def process_single_batch(batch_chunks, prompt, batch_number, all_reference_data,
             if isinstance(parsed_result, dict) and "results" in parsed_result:
                 for i, result in enumerate(parsed_result["results"]):
                     if isinstance(result, dict):
-                        # Log each result before mapping
                         result_title = result.get("title", f"Result {i+1}")
                         logger.info(f"🔍 [Thread-{batch_number}] Processing result {i+1}: '{result_title}'")
                         
                         result["batch_number"] = batch_number
 
-                        # Log partners before mapping
                         partners = result.get("partners", [])
-                        logger.info(f"👥 [Thread-{batch_number}] Result '{result_title}' has {len(partners)} partners: {[p.get('name', 'Unknown') for p in partners if isinstance(p, dict)]}")
+                        logger.info(f"👥 [Thread-{batch_number}] Result '{result_title}' has {len(partners)} partners: {[p.get('institution_name', 'Unknown') for p in partners if isinstance(p, dict)]}")
 
                         if mapping_service_url:
                             try:
@@ -78,16 +76,14 @@ def process_single_batch(batch_chunks, prompt, batch_number, all_reference_data,
                                 
                                 result_after_mapping = json.dumps(result, indent=2)
                                 
-                                # Check if mapping actually happened
                                 partners_after = result.get("partners", [])
                                 mapped_partners = [p for p in partners_after if isinstance(p, dict) and p.get("institution_id")]
                                 
                                 logger.info(f"✅ [Thread-{batch_number}] Field mapping completed for '{result_title}'. Mapped {len(mapped_partners)}/{len(partners_after)} partners")
                                 
-                                # Log detailed partner mapping results
                                 for j, partner in enumerate(partners_after):
                                     if isinstance(partner, dict):
-                                        partner_name = partner.get("name", "Unknown")
+                                        partner_name = partner.get("institution_name", "Unknown")
                                         institution_id = partner.get("institution_id")
                                         score = partner.get("similarity_score")
                                         
@@ -96,7 +92,6 @@ def process_single_batch(batch_chunks, prompt, batch_number, all_reference_data,
                                         else:
                                             logger.warning(f"  ❌ Partner {j+1}: '{partner_name}' → NOT MAPPED")
                                 
-                                # Log if no partners were mapped at all
                                 if len(partners) > 0 and len(mapped_partners) == 0:
                                     logger.error(f"🚨 [Thread-{batch_number}] CRITICAL: No partners were mapped for '{result_title}' despite having {len(partners)} partners!")
                                     logger.error(f"🚨 Before mapping: {result_before_mapping[:500]}...")
@@ -187,7 +182,57 @@ def merge_batch_results(batch_results_with_numbers):
     return merged_results
 
 
-def process_document_capdev(bucket_name, file_key, prompt=PROMPT_BULK_UPLOAD_CAPDEV, max_workers=20):
+def process_batches_in_groups(batches, prompt, all_reference_data, group_size=20, max_workers=20):
+    """
+    Process batches in sequential groups to avoid overwhelming services
+    """
+    all_results = []
+    total_groups = (len(batches) + group_size - 1) // group_size
+    
+    logger.info(f"📦 Processing {len(batches)} batches in {total_groups} sequential groups of {group_size} batches each")
+    logger.info(f"🔧 Using {max_workers} workers per group")
+    
+    for group_idx in range(0, len(batches), group_size):
+        group_batches = batches[group_idx:group_idx + group_size]
+        group_number = (group_idx // group_size) + 1
+        
+        logger.info(f"🔄 Processing group {group_number}/{total_groups} with {len(group_batches)} batches...")
+        
+        group_results = []
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_batch = {}
+            
+            for batch_idx, batch in enumerate(group_batches):
+                batch_number = group_idx + batch_idx + 1
+                future = executor.submit(
+                    process_single_batch,
+                    batch, prompt, batch_number, all_reference_data
+                )
+                future_to_batch[future] = batch_number
+            
+            for future in as_completed(future_to_batch):
+                batch_number = future_to_batch[future]
+                try:
+                    batch_result = future.result()
+                    group_results.append((batch_result, batch_number))
+                    logger.info(f"✅ Completed batch {batch_number} in group {group_number}")
+                except Exception as e:
+                    logger.error(f"❌ Exception in batch {batch_number}: {str(e)}")
+                    error_result = {"results": [{"error": str(e), "batch": batch_number}]}
+                    group_results.append((error_result, batch_number))
+        
+        all_results.extend(group_results)
+        
+        logger.info(f"✅ Completed group {group_number}/{total_groups}")
+        
+        if group_number < total_groups:
+            logger.info("⏳ Waiting 2 seconds before next group...")
+            time.sleep(2)
+    
+    return all_results
+
+
+def process_document_capdev(bucket_name, file_key, prompt=PROMPT_BULK_UPLOAD_CAPDEV, max_workers=20, group_size=20):
     start_time = time.time()
 
     try:
@@ -202,42 +247,26 @@ def process_document_capdev(bucket_name, file_key, prompt=PROMPT_BULK_UPLOAD_CAP
         all_reference_data = get_all_reference_data()
 
         if isinstance(document_content, dict) and document_content.get("type") == "excel":
-            logger.info(f"📊 Excel file detected with {len(chunks)} rows. Processing in parallel batches of 10...")
+            logger.info(f"📊 Excel file detected with {len(chunks)} rows. Processing in sequential groups...")
 
             batches = process_excel_in_batches(chunks, batch_size=5)
-            logger.info(f"📦 Created {len(batches)} batches for parallel processing with {max_workers} workers")
+            logger.info(f"📦 Created {len(batches)} batches")
+            logger.info(f"🔧 Will process in groups of {group_size} batches with {max_workers} workers per group")
+            logger.info(f"📋 Each group processes {group_size * 5} rows ({group_size} batches x 5 rows per batch)")
             
-            batch_results_with_numbers = []
-
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                future_to_batch = {}
-                for i, batch in enumerate(batches, 1):
-                    future = executor.submit(
-                        process_single_batch,
-                        batch, prompt, i, all_reference_data
-                    )
-                    future_to_batch[future] = i
-                
-                for future in as_completed(future_to_batch):
-                    batch_number = future_to_batch[future]
-                    try:
-                        batch_result = future.result()
-                        batch_results_with_numbers.append((batch_result, batch_number))
-                        logger.info(f"✅ Completed batch {batch_number}/{len(batches)}")
-                    except Exception as e:
-                        logger.error(f"❌ Exception in batch {batch_number}: {str(e)}")
-                        error_result = {"results": [{"error": str(e), "batch": batch_number}]}
-                        batch_results_with_numbers.append((error_result, batch_number))
+            batch_results_with_numbers = process_batches_in_groups(
+                batches, prompt, all_reference_data, group_size, max_workers
+            )
             
             final_result = merge_batch_results(batch_results_with_numbers)
             
             end_time = time.time()
             elapsed_time = end_time - start_time
             
-            logger.info(f"✅ Successfully processed all {len(batches)} batches in parallel")
+            logger.info(f"✅ Successfully processed all {len(batches)} batches in sequential groups")
             logger.info(f"📊 Total results: {len(final_result.get('results', []))}")
             logger.info(f"⏱️ Total processing time: {elapsed_time:.2f} seconds")
-            logger.info(f"🚀 Used {max_workers} parallel workers")
+            logger.info(f"🚀 Used {max_workers} workers per group, {group_size} batches per group")
 
             logger.info(f"✅ Successfully generated response:\n{json.dumps(final_result, indent=2, ensure_ascii=False)}")
             
@@ -247,7 +276,9 @@ def process_document_capdev(bucket_name, file_key, prompt=PROMPT_BULK_UPLOAD_CAP
                 "json_content": json.dumps(final_result, ensure_ascii=False, indent=2),
                 "batches_processed": len(batches),
                 "total_rows": len(chunks),
-                "workers_used": max_workers
+                "workers_used": max_workers,
+                "group_size": group_size,
+                "total_groups": (len(batches) + group_size - 1) // group_size
             }
             
         else:

@@ -62,7 +62,7 @@ def invoke_model(prompt, max_tokens=5000):
             ]
         }
         response = bedrock_runtime.invoke_model(
-            modelId="us.anthropic.claude-sonnet-4-20250514-v1:0",
+            modelId="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
             body=json.dumps(request_body),
             contentType="application/json",
             accept="application/json"

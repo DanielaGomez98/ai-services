@@ -298,7 +298,7 @@ def extract_unmapped_institutions(results: List[Dict]) -> List[Dict]:
                         similarity_score = partner.get("similarity_score", 0)
                         institution_name = partner.get("institution_name", "Unknown Institution")
                         
-                        if institution_id is None and similarity_score == 0:
+                        if (institution_id is None and similarity_score == 0) or (similarity_score < 70.0):
                             institution_key = institution_name.lower().strip()
                             
                             if institution_key not in seen_institutions:
@@ -307,7 +307,6 @@ def extract_unmapped_institutions(results: List[Dict]) -> List[Dict]:
                                     "record_id": record_id,
                                     "record_title": title,
                                     "source_field": "partners",
-                                    "partner_index": partner_idx + 1,
                                     "institution_name": institution_name,
                                     "institution_id": institution_id,
                                     "similarity_score": similarity_score
@@ -319,8 +318,8 @@ def extract_unmapped_institutions(results: List[Dict]) -> List[Dict]:
                 institution_id = trainee_affiliation.get("institution_id")
                 similarity_score = trainee_affiliation.get("similarity_score", 0)
                 affiliation_name = trainee_affiliation.get("institution_name", "Unknown Affiliation")
-                
-                if institution_id is None and similarity_score == 0:
+
+                if (institution_id is None and similarity_score == 0) or (similarity_score < 70.0):
                     institution_key = affiliation_name.lower().strip()
                     
                     if institution_key not in seen_institutions:
@@ -329,7 +328,6 @@ def extract_unmapped_institutions(results: List[Dict]) -> List[Dict]:
                             "record_id": record_id,
                             "record_title": title,
                             "source_field": "trainee_affiliation",
-                            "partner_index": None,
                             "institution_name": affiliation_name,
                             "institution_id": institution_id,
                             "similarity_score": similarity_score
@@ -353,8 +351,7 @@ def create_unmapped_report_csv(unmapped_institutions: List[Dict]) -> str:
         "source_field", 
         "institution_name", 
         "institution_id", 
-        "similarity_score",
-        "partner_index"
+        "similarity_score"
     ]
     
     df = df[column_order]
